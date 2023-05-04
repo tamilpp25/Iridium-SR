@@ -3,11 +3,12 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"github.com/fatih/color"
-	"github.com/google/gopacket/pcap"
 	"io/ioutil"
 	"log"
 	"os"
+
+	"github.com/fatih/color"
+	"github.com/google/gopacket/pcap"
 )
 
 type Config struct {

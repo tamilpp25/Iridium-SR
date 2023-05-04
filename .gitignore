@@ -1,7 +1,8 @@
 /build
 /vendor
 
-/data
+/data/proto
+/data/packetIds.json
 
 .DS_Store
 

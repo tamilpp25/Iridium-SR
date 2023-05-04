@@ -3,11 +3,12 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
+	"log"
+
 	"github.com/jhump/protoreflect/desc"
 	"github.com/jhump/protoreflect/desc/protoparse"
 	"github.com/jhump/protoreflect/dynamic"
-	"io/ioutil"
-	"log"
 )
 
 var msgMap = make(map[string]*desc.MessageDescriptor)

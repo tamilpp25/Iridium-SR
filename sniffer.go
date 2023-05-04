@@ -4,19 +4,19 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"github.com/fatih/color"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/pcapgo"
-	"github.com/jhump/protoreflect/dynamic"
-	"github.com/xtaci/kcp-go"
 	"io/ioutil"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
+	"github.com/xtaci/kcp-go"
 )
 
 type Packet struct {
@@ -35,10 +35,9 @@ type UniCmdItem struct {
 	Raw        []byte      `json:"raw"`
 }
 
-var getPlayerTokenRspPacketId uint16
-var unionCmdNotifyPacketId uint16
+var playerGetTokenScRspPacketId uint16
 
-var initialKey = make(map[uint16][]byte)
+var initialKey = make(map[uint32][]byte)
 var sessionKey []byte
 
 var captureHandler *pcap.Handle
@@ -61,6 +60,7 @@ func openCapture() {
 	readKeys()
 	var err error
 	captureHandler, err = pcap.OpenLive(config.DeviceName, 1500, true, -1)
+
 	if err != nil {
 		log.Println("Could not open capture", err)
 		return
@@ -89,7 +89,7 @@ func closeHandle() {
 }
 
 func readKeys() {
-	var initialKeyJson map[uint16]string
+	var initialKeyJson map[uint32]string
 	file, err := ioutil.ReadFile("./data/Keys.json")
 	if err != nil {
 		log.Fatal("Could not load initial key @ ./data/Keys.json #1", err)
@@ -104,14 +104,13 @@ func readKeys() {
 		initialKey[k] = decode
 	}
 
-	getPlayerTokenRspPacketId = packetNameMap["GetPlayerTokenRsp"]
-	unionCmdNotifyPacketId = packetNameMap["UnionCmdNotify"]
+	playerGetTokenScRspPacketId = packetNameMap["PlayerGetTokenScRsp"]
 }
 
 func startSniffer() {
 	defer captureHandler.Close()
 
-	err := captureHandler.SetBPFFilter("udp portrange 22101-22102")
+	err := captureHandler.SetBPFFilter("udp portrange 23301-23302")
 	if err != nil {
 		log.Println("Could not set the filter of capture")
 		return
@@ -141,7 +140,7 @@ func startSniffer() {
 		capTime := packet.Metadata().Timestamp
 		data := packet.ApplicationLayer().Payload()
 		udp := packet.TransportLayer().(*layers.UDP)
-		fromServer := udp.SrcPort == 22101 || udp.SrcPort == 22102
+		fromServer := udp.SrcPort == 23301 || udp.SrcPort == 23302
 
 		if len(data) <= 20 {
 			handleSpecialPacket(data, fromServer, capTime)
@@ -196,8 +195,8 @@ func handleSpecialPacket(data []byte, fromServer bool, timestamp time.Time) {
 }
 
 func handleProtoPacket(data []byte, fromServer bool, timestamp time.Time) {
-	key := binary.BigEndian.Uint16(data[:4])
-	key = key ^ 0x4567
+	key := binary.BigEndian.Uint32(data[:8])
+	key = key ^ 0x9D74C714 // Magic Start for SR
 	var xorPad []byte
 
 	if sessionKey != nil {
@@ -211,13 +210,11 @@ func handleProtoPacket(data []byte, fromServer bool, timestamp time.Time) {
 	}
 	xorDecrypt(data, xorPad)
 
-	packetId := binary.BigEndian.Uint16(data[2:4])
+	packetId := binary.BigEndian.Uint16(data[4:6])
 	var objectJson interface{}
 
-	if packetId == getPlayerTokenRspPacketId {
-		data, objectJson = handleGetPlayerTokenRspPacket(data, packetId, objectJson)
-	} else if packetId == unionCmdNotifyPacketId {
-		data, objectJson = handleUnionCmdNotifyPacket(data, packetId, objectJson)
+	if packetId == playerGetTokenScRspPacketId {
+		data, objectJson = handlePlayerGetTokenScRspPacket(data, packetId, objectJson)
 	} else {
 		data = removeHeaderForParse(data)
 		objectJson = parseProtoToInterface(packetId, data)
@@ -226,53 +223,26 @@ func handleProtoPacket(data []byte, fromServer bool, timestamp time.Time) {
 	buildPacketToSend(data, fromServer, timestamp, packetId, objectJson)
 }
 
-func handleGetPlayerTokenRspPacket(data []byte, packetId uint16, objectJson interface{}) ([]byte, interface{}) {
+func handlePlayerGetTokenScRspPacket(data []byte, packetId uint16, objectJson interface{}) ([]byte, interface{}) {
 	data = removeMagic(data)
 	dMsg, err := parseProto(packetId, data)
 	if err != nil {
-		log.Println("Could not parse GetPlayerTokenRspPacket proto", err)
+		log.Println("Could not parse PlayerGetTokenScRsp proto", err)
 		closeHandle()
 	}
 	oj, err := dMsg.MarshalJSON()
 	if err != nil {
-		log.Println("Could not parse GetPlayerTokenRspPacket proto", err)
+		log.Println("Could not parse PlayerGetTokenScRsp proto", err)
 		closeHandle()
 	}
 	err = json.Unmarshal(oj, &objectJson)
 	if err != nil {
-		log.Println("Could not parse GetPlayerTokenRspPacket proto", err)
+		log.Println("Could not parse PlayerGetTokenScRsp proto", err)
 		closeHandle()
 	}
 	seed := dMsg.GetFieldByName("secret_key_seed").(uint64)
 	sessionKey = createXorPad(seed)
 
-	return data, objectJson
-}
-
-func handleUnionCmdNotifyPacket(data []byte, packetId uint16, objectJson interface{}) ([]byte, interface{}) {
-	data = removeHeaderForParse(data)
-	dMsg, err := parseProto(packetId, data)
-	if err != nil {
-		log.Println("Could not parse UnionCmdNotify proto", err)
-	}
-
-	cmdList := dMsg.GetFieldByName("cmd_list").([]interface{})
-	cmdListJson := make([]*UniCmdItem, len(cmdList))
-	for i, item := range cmdList {
-		msgItem := item.(*dynamic.Message)
-		itemPacketId := uint16(msgItem.GetFieldByName("message_id").(uint32))
-		itemData := msgItem.GetFieldByName("body").([]byte)
-
-		childJson := parseProtoToInterface(itemPacketId, itemData)
-
-		cmdListJson[i] = &UniCmdItem{
-			PacketId:   itemPacketId,
-			PacketName: GetProtoNameById(itemPacketId),
-			Object:     childJson,
-			Raw:        itemData,
-		}
-	}
-	objectJson = cmdListJson
 	return data, objectJson
 }
 
@@ -304,9 +274,9 @@ func logPacket(packet *Packet) {
 		from = "[Server]"
 	}
 	forward := ""
-	if strings.Contains(packet.PacketName, "Rsp") {
+	if strings.Contains(packet.PacketName, "ScRsp") {
 		forward = "<--"
-	} else if strings.Contains(packet.PacketName, "Req") {
+	} else if strings.Contains(packet.PacketName, "CsReq") {
 		forward = "-->"
 	} else if strings.Contains(packet.PacketName, "Notify") && packet.FromServer {
 		forward = "<-i"
@@ -323,29 +293,4 @@ func logPacket(packet *Packet) {
 		"\t",
 		len(packet.Raw),
 	)
-
-	if packet.PacketId == unionCmdNotifyPacketId {
-		logUnionCmdNotifyPacket(packet)
-	}
-}
-
-func logUnionCmdNotifyPacket(packet *Packet) {
-	uniCmdItem := packet.Object.([]*UniCmdItem)
-
-	for i, item := range uniCmdItem {
-		group := "├─"
-		if i == len(uniCmdItem) {
-			group = "└─"
-		}
-
-		log.Println("\t",
-			"\t",
-			color.CyanString(group),
-			"\t",
-			color.RedString(item.PacketName),
-			color.YellowString("#"+strconv.Itoa(int(item.PacketId))),
-			"\t",
-			len(item.Raw),
-		)
-	}
 }

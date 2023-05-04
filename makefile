@@ -1,4 +1,4 @@
-BINARY=IridiumNG
+BINARY=IridiumSR
 
 build-win:
 	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -o build/${BINARY}_windows_amd64.exe
@@ -13,5 +13,4 @@ build-arm64:
 
 pre-build:
 	mkdir build
-	mkdir data
 	cp ./config.json ./build/config.json
