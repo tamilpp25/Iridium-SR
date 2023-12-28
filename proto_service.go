@@ -27,11 +27,8 @@ func InitProto() {
 		packetNameMap[v] = k
 	}
 
-	protoParser.ImportPaths = []string{"./data/proto/"}
-	for _, v := range packetIdMap {
-		LoadProto(v)
-	}
-
+	protoParser.ImportPaths = []string{"./data/"}
+	LoadProto("StarRail")
 }
 
 func LoadProto(protoName string) {
@@ -41,7 +38,9 @@ func LoadProto(protoName string) {
 		return
 	}
 
-	msgMap[protoName] = fileDesc[0].FindMessage(protoName)
+	for _, msg := range fileDesc[0].GetMessageTypes() {
+		msgMap[msg.GetName()] = msg
+	}
 }
 
 func GetProtoById(id uint16) *desc.MessageDescriptor {
