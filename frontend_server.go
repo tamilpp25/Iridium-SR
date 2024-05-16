@@ -2,13 +2,14 @@ package main
 
 import (
 	"embed"
-	"github.com/gin-gonic/contrib/static"
-	"github.com/gin-gonic/gin"
 	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/gin-gonic/contrib/static"
+	"github.com/gin-gonic/gin"
 )
 
 var eventStream = make(chan string)
