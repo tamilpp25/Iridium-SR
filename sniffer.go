@@ -208,6 +208,10 @@ func handleProtoPacket(data []byte, fromServer bool, timestamp time.Time) {
 		}
 		xorPad = initialKey[key]
 	}
+	if xorPad == nil {
+		log.Println("Could not found key to decrypt", key)
+		return
+	}
 	xorDecrypt(data, xorPad)
 
 	packetId := binary.BigEndian.Uint16(data[4:6])
