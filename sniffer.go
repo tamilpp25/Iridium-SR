@@ -180,7 +180,7 @@ func handleKcp(data []byte, fromServer bool, capTime time.Time) {
 }
 
 func handleSpecialPacket(data []byte, fromServer bool, timestamp time.Time) {
-	// sessionKey = nil
+	sessionKey = nil
 	switch binary.BigEndian.Uint32(data[:4]) {
 	case 0xFF:
 		buildPacketToSend(data, fromServer, timestamp, 0, "Hamdshanke pls.")
