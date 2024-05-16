@@ -38,7 +38,8 @@ type UniCmdItem struct {
 var playerGetTokenScRspPacketId uint16
 
 var initialKey = make(map[uint32][]byte)
-var sessionKey []byte
+
+// var sessionKey []byte
 
 var captureHandler *pcap.Handle
 var kcpMap map[string]*kcp.KCP
@@ -180,7 +181,7 @@ func handleKcp(data []byte, fromServer bool, capTime time.Time) {
 }
 
 func handleSpecialPacket(data []byte, fromServer bool, timestamp time.Time) {
-	sessionKey = nil
+	// sessionKey = nil
 	switch binary.BigEndian.Uint32(data[:4]) {
 	case 0xFF:
 		buildPacketToSend(data, fromServer, timestamp, 0, "Hamdshanke pls.")
@@ -197,24 +198,19 @@ func handleSpecialPacket(data []byte, fromServer bool, timestamp time.Time) {
 func handleProtoPacket(data []byte, fromServer bool, timestamp time.Time) {
 	key := binary.BigEndian.Uint32(data[:8])
 	key = key ^ 0x9D74C714 // Magic Start for SR
-	var xorPad []byte
-
-	if sessionKey != nil {
-		xorPad = sessionKey
-	} else {
-		if len(initialKey[key]) == 0 {
-			log.Println("Could not found initial key to decrypt", key)
-			closeHandle()
-		}
-		xorPad = initialKey[key]
+	if len(initialKey[key]) == 0 {
+		log.Println("Could not found initial key to decrypt", key)
+		closeHandle()
+		return
 	}
+	xorPad := initialKey[key]
 	xorDecrypt(data, xorPad)
 
 	packetId := binary.BigEndian.Uint16(data[4:6])
 	var objectJson interface{}
 
 	if packetId == playerGetTokenScRspPacketId {
-		data, objectJson = handlePlayerGetTokenScRspPacket(data, packetId, objectJson)
+		data, objectJson = handlePlayerGetTokenScRspPacket(data, packetId, objectJson, key)
 	} else {
 		data = removeHeaderForParse(data)
 		objectJson = parseProtoToInterface(packetId, data)
@@ -223,7 +219,7 @@ func handleProtoPacket(data []byte, fromServer bool, timestamp time.Time) {
 	buildPacketToSend(data, fromServer, timestamp, packetId, objectJson)
 }
 
-func handlePlayerGetTokenScRspPacket(data []byte, packetId uint16, objectJson interface{}) ([]byte, interface{}) {
+func handlePlayerGetTokenScRspPacket(data []byte, packetId uint16, objectJson interface{}, key uint32) ([]byte, interface{}) {
 	data = removeMagic(data)
 	dMsg, err := parseProto(packetId, data)
 	if err != nil {
@@ -241,7 +237,7 @@ func handlePlayerGetTokenScRspPacket(data []byte, packetId uint16, objectJson in
 		closeHandle()
 	}
 	seed := dMsg.GetFieldByName("secret_key_seed").(uint64)
-	sessionKey = createXorPad(seed)
+	initialKey[key] = createXorPad(seed)
 
 	return data, objectJson
 }
