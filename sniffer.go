@@ -30,6 +30,7 @@ type Packet struct {
 }
 
 var playerGetTokenScRspPacketId uint16
+var fightEnterScRspPacketId uint16
 
 var initialKey = make(map[uint32][]byte)
 
@@ -98,6 +99,7 @@ func readKeys() {
 	}
 
 	playerGetTokenScRspPacketId = packetNameMap["PlayerGetTokenScRsp"]
+	fightEnterScRspPacketId = packetNameMap["FightEnterScRsp"]
 }
 
 func startSniffer() {
@@ -202,7 +204,8 @@ func handleProtoPacket(data []byte, fromServer bool, timestamp time.Time) {
 	packetId := binary.BigEndian.Uint16(data[4:6])
 	var objectJson interface{}
 
-	if packetId == playerGetTokenScRspPacketId {
+	if packetId == playerGetTokenScRspPacketId ||
+		packetId == fightEnterScRspPacketId {
 		data, objectJson = handlePlayerGetTokenScRspPacket(data, packetId, objectJson)
 	} else {
 		data = removeHeaderForParse(data)
