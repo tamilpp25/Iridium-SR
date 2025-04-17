@@ -103,7 +103,7 @@ func readKeys() {
 func startSniffer() {
 	defer captureHandler.Close()
 
-	expr := fmt.Sprintf("tcp portrange %v-%v", uint16(config.MinKcpPort), uint16(config.MaxKcpPort))
+	expr := fmt.Sprintf("udp portrange %v-%v", uint16(config.MinKcpPort), uint16(config.MaxKcpPort))
 	err := captureHandler.SetBPFFilter(expr)
 	if err != nil {
 		log.Println("Could not set the filter of capture")
@@ -134,10 +134,8 @@ func startSniffer() {
 		capTime := packet.Metadata().Timestamp
 		data := packet.ApplicationLayer().Payload()
 		udp := packet.TransportLayer().(*layers.UDP)
-		fromServer := false
-		if udp.SrcPort >= config.MinKcpPort || udp.SrcPort <= config.MaxKcpPort {
-			fromServer = true
-		}
+
+		fromServer := udp.SrcPort >= config.MinKcpPort && udp.SrcPort <= config.MaxKcpPort
 
 		if len(data) <= 20 {
 			handleSpecialPacket(data, fromServer, capTime)
