@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -28,17 +29,9 @@ type Packet struct {
 	Raw        []byte      `json:"raw"`
 }
 
-type UniCmdItem struct {
-	PacketId   uint16      `json:"packetId"`
-	PacketName string      `json:"packetName"`
-	Object     interface{} `json:"object"`
-	Raw        []byte      `json:"raw"`
-}
-
 var playerGetTokenScRspPacketId uint16
 
 var initialKey = make(map[uint32][]byte)
-var sessionKey []byte
 
 var captureHandler *pcap.Handle
 var kcpMap map[string]*kcp.KCP
@@ -110,7 +103,8 @@ func readKeys() {
 func startSniffer() {
 	defer captureHandler.Close()
 
-	err := captureHandler.SetBPFFilter("udp portrange 23301-23302")
+	expr := fmt.Sprintf("tcp portrange %v-%v", uint16(config.MinKcpPort), uint16(config.MaxKcpPort))
+	err := captureHandler.SetBPFFilter(expr)
 	if err != nil {
 		log.Println("Could not set the filter of capture")
 		return
@@ -140,7 +134,10 @@ func startSniffer() {
 		capTime := packet.Metadata().Timestamp
 		data := packet.ApplicationLayer().Payload()
 		udp := packet.TransportLayer().(*layers.UDP)
-		fromServer := udp.SrcPort == 23301 || udp.SrcPort == 23302
+		fromServer := false
+		if udp.SrcPort >= config.MinKcpPort || udp.SrcPort <= config.MaxKcpPort {
+			fromServer = true
+		}
 
 		if len(data) <= 20 {
 			handleSpecialPacket(data, fromServer, capTime)
@@ -180,7 +177,6 @@ func handleKcp(data []byte, fromServer bool, capTime time.Time) {
 }
 
 func handleSpecialPacket(data []byte, fromServer bool, timestamp time.Time) {
-	sessionKey = nil
 	switch binary.BigEndian.Uint32(data[:4]) {
 	case 0xFF:
 		buildPacketToSend(data, fromServer, timestamp, 0, "Hamdshanke pls.")
@@ -195,21 +191,12 @@ func handleSpecialPacket(data []byte, fromServer bool, timestamp time.Time) {
 }
 
 func handleProtoPacket(data []byte, fromServer bool, timestamp time.Time) {
-	key := binary.BigEndian.Uint32(data[:8])
+	key := binary.BigEndian.Uint32(data[:4])
 	key = key ^ 0x9D74C714 // Magic Start for SR
 	var xorPad []byte
-
-	if sessionKey != nil {
-		xorPad = sessionKey
-	} else {
-		if len(initialKey[key]) == 0 {
-			log.Println("Could not found initial key to decrypt", key)
-			closeHandle()
-		}
-		xorPad = initialKey[key]
-	}
+	xorPad = initialKey[key]
 	if xorPad == nil {
-		log.Println("Could not found key to decrypt", key)
+		log.Printf("Could not found key to decrypt:%v,fromServer:%t\n", key, fromServer)
 		return
 	}
 	xorDecrypt(data, xorPad)
@@ -245,7 +232,9 @@ func handlePlayerGetTokenScRspPacket(data []byte, packetId uint16, objectJson in
 		closeHandle()
 	}
 	seed := dMsg.GetFieldByName("secret_key_seed").(uint64)
-	sessionKey = createXorPad(seed)
+	sessionKey := createXorPad(seed)
+
+	initialKey[binary.BigEndian.Uint32(sessionKey[:4])] = sessionKey
 
 	return data, objectJson
 }

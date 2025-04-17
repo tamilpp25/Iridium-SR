@@ -23,6 +23,8 @@ A KCP packet sniffer + visualizer in one, backend rewritten in Go.
   "packetFilter" : [ // 这里列出的包名将不会在前端显示
     ""
   ],
-  "autoSavePcapFiles" : true // 自动保存抓包记录文件
+  "autoSavePcapFiles" : true, // 自动保存抓包记录文件
+  "maxKcpPort": "23301", // 最大服务器kcp端口
+  "minKcpPort": "23302" // 重小服务器kcp端口
 }
 ```

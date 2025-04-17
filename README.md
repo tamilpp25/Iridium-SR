@@ -25,7 +25,9 @@ You can download the binary(win/linux) from Actions, or build from source
   "packetFilter" : [ // the packets listed here will not show in frontend
     ""
   ],
-  "autoSavePcapFiles" : true // auto save capture to current folder
+  "autoSavePcapFiles" : true, // auto save capture to current folder
+  "maxKcpPort": "23301", // max server kcp port
+  "minKcpPort": "23302" // min server kcp port
 }
 ```
 

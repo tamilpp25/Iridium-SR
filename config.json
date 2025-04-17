@@ -3,5 +3,7 @@
   "packetFilter" : [
     ""
   ],
-  "autoSavePcapFiles" : true
+  "autoSavePcapFiles" : true,
+  "maxKcpPort": "23301",
+  "minKcpPort": "23302"
 }

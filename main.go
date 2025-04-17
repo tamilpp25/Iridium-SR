@@ -8,13 +8,16 @@ import (
 	"os"
 
 	"github.com/fatih/color"
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 )
 
 type Config struct {
-	DeviceName        string   `json:"deviceName"`
-	PacketFilter      []string `json:"packetFilter"`
-	AutoSavePcapFiles bool     `json:"autoSavePcapFiles"`
+	DeviceName        string         `json:"deviceName"`
+	PacketFilter      []string       `json:"packetFilter"`
+	AutoSavePcapFiles bool           `json:"autoSavePcapFiles"`
+	MaxKcpPort        layers.UDPPort `json:"maxKcpPort"`
+	MinKcpPort        layers.UDPPort `json:"minKcpPort"`
 }
 
 var config *Config
