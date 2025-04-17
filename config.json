@@ -4,6 +4,6 @@
     ""
   ],
   "autoSavePcapFiles" : true,
-  "maxKcpPort": 23302,
+  "maxKcpPort": 23802,
   "minKcpPort": 23301
 }
