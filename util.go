@@ -9,6 +9,9 @@ func removeMagic(data []byte) []byte {
 	cut := data[7]
 	data = data[10+2:]           // Removes token + four byte magic
 	data = data[0 : len(data)-4] // Removes four byte magic at the end
+	if len(data) < int(cut) {
+		return data
+	}
 	data = data[cut:]
 	return data
 }
@@ -16,6 +19,9 @@ func removeMagic(data []byte) []byte {
 func removeHeaderForParse(data []byte) []byte {
 	cut := data[8]
 	data = removeMagic(data)
+	if len(data) < int(cut) {
+		return data
+	}
 	return data[cut:]
 }
 
